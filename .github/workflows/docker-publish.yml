@@ -106,5 +106,4 @@ jobs:
           push: true
           sbom: true
           set: |
-            *.tags=${{ env.REGISTRY}}/${{ github.actor }}/${{ env.IMAGE_NAME }}
             *.platform=${{ matrix.platform }}

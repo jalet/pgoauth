@@ -4,9 +4,8 @@ platforms = [
 ]
 
 extensions = [ ]
-
-authors = "Joakim Jarsäter <j@jarsater.com>"
-url = "https://github.com/jalet/postgres-containers"
+authors    = "Joakim Jarsäter <j@jarsater.com>"
+url        = "https://github.com/jalet/postgres-containers"
 
 variable "DEFAULT_TAG" {
   default = "app:local"
@@ -45,6 +44,9 @@ EOT
   platforms = [
    "linux/amd64"
     # "linux/arm64"
+  ]
+  tags = [
+    "ghcr.io/jalet/postgres-containers:${pgVersion}"
   ]
   name = "postgresql-${index(split(".",cleanVersion(pgVersion)),0)}-system-trixie"
   target = "${tgt}"
