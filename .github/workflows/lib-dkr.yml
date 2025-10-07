@@ -1,16 +1,20 @@
 ---
-name: Docker
+name: lib - Docker
 
 on:
   push:
     branches: ['main']
-    tags: ['v*.*.*']
+    paths:
+      - lib/**
   pull_request:
     branches: ['main']
+    paths:
+      - lib/**
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  WORKING_DIR: lib
 
 permissions:
   contents: read
@@ -30,7 +34,7 @@ jobs:
       - name: Create matrix
         id: platforms
         run: |
-          echo "matrix=$(docker buildx bake -f cwd://bake.hcl 'https://github.com/cloudnative-pg/postgres-containers.git' psql --print | jq -cr '.target[].platforms')" >>${GITHUB_OUTPUT}
+          echo "matrix=$(docker buildx bake -f cwd://docker-bake.hcl -f cwd://${{ env.WORKING_DIR}}/docker-bake.hcl --print | jq -cr '.target[].platforms')" >> ${GITHUB_OUTPUT}
 
       - name: Show matrix
         run: |
@@ -80,7 +84,6 @@ jobs:
           path: ${{ runner.temp }}
 
       - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -97,13 +100,10 @@ jobs:
         id: bake
         uses: docker/bake-action@v6
         with:
-          source: https://github.com/cloudnative-pg/postgres-containers.git
           files: |
-            docker-bake.hcl
-            cwd://bake.hcl
+            cwd://docker-bake.hcl
+            cwd://${{ env.WORKING_DIR }}/docker-bake.hcl
             cwd://${{ runner.temp }}/bake-meta.json
-          targets: psql
-          push: true
-          sbom: true
+          push: ${{ github.event_name != 'pull_request' }}
           set: |
             *.platform=${{ matrix.platform }}
