@@ -1,4 +1,5 @@
-FROM ubuntu:24.04 AS builder
+ARG BASE_IMAGE="ubuntu:24.04"
+FROM $BASE_IMAGE AS builder
 
 ENV CC=clang-21
 ENV CXX=clang++-21
@@ -45,15 +46,10 @@ RUN git clone --recurse-submodules https://github.com/Percona-Lab/pg_oauth.git
 WORKDIR /build/pg_oauth
 RUN make -j"$(nproc)" PG_CONFIG=${PGHOME}/bin/pg_config
 
-
 # -----------------------------------------------------------------------------
 # 4. Default command: show resulting .so
 # -----------------------------------------------------------------------------
 FROM alpine:3
-
-LABEL org.opencontainers.image.source=https://github.com/jalet/pgoauth
-LABEL org.opencontainers.image.description="pg_oauth.so"
-LABEL org.opencontainers.image.licenses=MIT
 
 COPY --from=builder /build/pg_oauth/pg_oauth.so /pg_oauth.so
 RUN apk add --no-cache file
