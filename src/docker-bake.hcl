@@ -5,11 +5,11 @@ group "default" {
 target "myimage" {
   dockerfile-inline = <<EOT
 ARG BASE_IMAGE="ghcr.io/cloudnative-pg/postgresql:18.0-system-trixie"
+ARG LIBVERSION
 
 FROM $BASE_IMAGE AS myimage
 
 ARG EXTENSIONS
-ARG LIBVERSION
 
 USER root
 
