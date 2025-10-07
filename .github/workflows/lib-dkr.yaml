@@ -107,6 +107,7 @@ jobs:
             cwd://${{ env.WORKING_DIR }}/docker-bake.hcl
             cwd://${{ runner.temp }}/bake-meta.json
           set: |
+            *.tags=ghcr.io/${{ env.IMAGE_NAME }}
             *.platform=${{ matrix.platform }}
             *.output=type=image,push-by-digest=true,name-canonical=true,push=true
 

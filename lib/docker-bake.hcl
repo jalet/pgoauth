@@ -5,9 +5,6 @@ group "default" {
 target "lib" {
   inherits = ["docker-metadata-action"]
   dockerfile = "lib/Dockerfile"
-  tags = [
-    "ghcr.io/jalet/pgoauth:${version}"
-  ]
   name = "pgoauth-lib"
   matrix = {
     version = ["v0.0.1"]
