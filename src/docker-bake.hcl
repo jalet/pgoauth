@@ -2,11 +2,11 @@ group "default" {
   targets = ["src"]
 }
 
-target "src" {
+target "myimage" {
   dockerfile-inline = <<EOT
 ARG BASE_IMAGE="ghcr.io/cloudnative-pg/postgresql:18.0-system-trixie"
 
-FROM $BASE_IMAGE AS psql
+FROM $BASE_IMAGE AS myimage
 
 ARG EXTENSIONS
 ARG LIBVERSION
@@ -23,6 +23,7 @@ COPY --from=ghcr.io/jalet/pgoauth:$LIBVERSION pg_oauth.so /usr/lib/postgresql/18
 USER 26
 EOT
   matrix = {
+    tgt = [ "myimage", ]
     pgVersion = [ "18.0", ]
   }
   tags = [
@@ -33,6 +34,7 @@ EOT
     "linux/amd64",
     "linux/arm64",
   ]
+  target = "${tgt}"
   args = {
     BASE_IMAGE = "ghcr.io/cloudnative-pg/postgresql:${cleanVersion(pgVersion)}-system-trixie",
     EXTENSIONS = "${getExtensionsString(pgVersion, extensions)}",
