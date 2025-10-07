@@ -3,7 +3,7 @@ group "default" {
 }
 
 target "src" {
-  dockerfile = "Dockerfile"
+  dockerfile = "src/Dockerfile"
   matrix = {
     pgVersion = [ "18.0", ]
   }
