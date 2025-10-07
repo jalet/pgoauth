@@ -1,5 +1,5 @@
 group "default" {
-  targets = ["src"]
+  targets = ["myimage"]
 }
 
 target "myimage" {
