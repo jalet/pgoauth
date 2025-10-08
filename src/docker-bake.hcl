@@ -1,15 +1,25 @@
 group "default" {
-  targets = ["myimage"]
+  targets = ["src-local"]
 }
 
-target "myimage" {
+target "src-all" {
+  inherits  = ["src"]
+  platforms = ["linux/amd64", "linux/arm64",]
+}
+
+target "src-local" {
+  inherits = ["src"]
+  output   = ["type=docker"]
+}
+
+target "src" {
   dockerfile-inline = <<EOT
 ARG BASE_IMAGE="ghcr.io/cloudnative-pg/postgresql:18.0-system-trixie"
 ARG LIBVERSION
 
 FROM ghcr.io/jalet/pgoauth:$LIBVERSION AS lib 
 
-FROM $BASE_IMAGE AS myimage
+FROM $BASE_IMAGE AS src
 
 ARG EXTENSIONS
 

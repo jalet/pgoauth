@@ -2,6 +2,16 @@ group "default" {
   targets = ["lib-local"]
 }
 
+target "lib-all" {
+  inherits  = ["lib"]
+  platforms = ["linux/amd64", "linux/arm64",]
+}
+
+target "lib-local" {
+  inherits = ["lib"]
+  output   = ["type=docker"]
+}
+
 target "lib" {
   inherits   = ["docker-metadata-action"]
   dockerfile = "lib/Dockerfile"
@@ -48,12 +58,3 @@ target "lib" {
   }
 }
 
-target "lib-all" {
-  inherits  = ["lib"]
-  platforms = ["linux/amd64", "linux/arm64",]
-}
-
-target "lib-local" {
-  inherits = ["lib"]
-  output   = ["type=docker"]
-}
