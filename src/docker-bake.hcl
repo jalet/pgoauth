@@ -15,15 +15,15 @@ target "src-local" {
 target "src" {
   dockerfile = "Dockerfile"
   matrix = {
-    version = [ "18.0", ]
+    pgVersion = [ "18.0", ]
   }
   platforms = [
     "linux/amd64",
     "linux/arm64",
   ]
   args = {
-    BASE_IMAGE = "ghcr.io/cloudnative-pg/postgresql:${cleanVersion(version)}-system-trixie",
-    EXTENSIONS = "${getExtensionsString(version, extensions)}",
+    BASE_IMAGE = "ghcr.io/cloudnative-pg/postgresql:${cleanVersion(pgVersion)}-system-trixie",
+    EXTENSIONS = "${getExtensionsString(pgVersion, extensions)}",
     LIBVERSION = "main"
   }
 }
