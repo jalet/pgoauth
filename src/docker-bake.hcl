@@ -40,6 +40,6 @@ EOT
   args = {
     BASE_IMAGE = "ghcr.io/cloudnative-pg/postgresql:${cleanVersion(pgVersion)}-system-trixie",
     EXTENSIONS = "${getExtensionsString(pgVersion, extensions)}",
-    LIBVERSION = "v0.0.1"
+    LIBVERSION = "main"
   }
 }
