@@ -15,8 +15,10 @@ target "src-local" {
 target "src" {
   dockerfile = "Dockerfile"
   matrix = {
+    tgt       = [ "src", ]
     pgVersion = [ "18.0", ]
   }
+  target = "${tgt}"
   platforms = [
     "linux/amd64",
     "linux/arm64",
