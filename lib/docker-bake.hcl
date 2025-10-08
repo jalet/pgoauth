@@ -1,19 +1,20 @@
 group "default" {
-  targets = ["lib"]
+  targets = ["lib-local"]
 }
 
 target "lib" {
-  inherits = ["docker-metadata-action"]
+  inherits   = ["docker-metadata-action"]
   dockerfile = "lib/Dockerfile"
-  name = "pgoauth-lib"
+
   matrix = {
     version = ["v0.0.1"]
   }
-  platforms = ["linux/amd64", "linux/arm64",]
+
   attest = [
     "type=provenance,mode=max",
     "type=sbom"
   ]
+
   annotations = [
     "index,manifest:org.opencontainers.image.created=${now}",
     "index,manifest:org.opencontainers.image.url=${url}",
@@ -27,6 +28,7 @@ target "lib" {
     "index,manifest:org.opencontainers.image.authors=${authors}",
     "index,manifest:org.opencontainers.image.licenses=MIT",
   ]
+
   labels = {
     "org.opencontainers.image.created" = "${now}",
     "org.opencontainers.image.url" = "${url}",
@@ -40,7 +42,18 @@ target "lib" {
     "org.opencontainers.image.authors" = "${authors}",
     "org.opencontainers.image.licenses" = "MIT"
   }
+
   args = {
     BASE_IMAGE = "ubuntu:24.04",
   }
+}
+
+target "lib-all" {
+  inherits  = ["lib"]
+  platforms = ["linux/amd64", "linux/arm64",]
+}
+
+target "lib-local" {
+  inherits = ["lib"]
+  output   = ["type=docker"]
 }
