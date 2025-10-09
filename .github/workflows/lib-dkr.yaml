@@ -161,7 +161,8 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         run: |
           docker buildx imagetools create \
-            $(jq -cr '.target."docker-metadata-action".tags | map("-t " + .) | join(" ")' bake-meta.json) \
+            $(jq -cr '.target."docker-metadata-action".tags | map("-t " + .) | join(" ")' \
+            ${{ runner.temp }}/bake-meta.json) \
             $(printf '${{ env.REGISTRY}}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect image
