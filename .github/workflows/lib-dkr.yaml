@@ -4,6 +4,8 @@ name: "lib - Docker"
 on:
   push:
     branches: ["main"]
+    tags:
+      - "v*.*.*"
     paths:
       - lib/**
       - .github/workflows/lib-dkr.yaml
@@ -50,6 +52,8 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 

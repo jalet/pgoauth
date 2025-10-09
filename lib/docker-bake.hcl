@@ -4,8 +4,7 @@ group "default" {
 
 target "lib-all" {
   inherits  = ["lib"]
-  // platforms = ["linux/amd64", "linux/arm64",]
-  platforms = ["linux/amd64" ]
+  platforms = ["linux/amd64", "linux/arm64",]
 }
 
 target "lib-local" {
