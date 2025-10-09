@@ -10,14 +10,15 @@ target "src-all" {
 target "src-local" {
   inherits = ["src"]
   output   = ["type=docker"]
+  tags     = ["local"]
 }
 
 target "src" {
   dockerfile-inline = <<EOT
 ARG BASE_IMAGE="ghcr.io/cloudnative-pg/postgresql:18.0-system-trixie"
-ARG LIBVERSION
+ARG LIBVERSION="latest"
 
-FROM ghcr.io/jalet/pgoauth:$LIBVERSION AS lib 
+FROM ghcr.io/jalet/postgres-oauth-lib:$LIBVERSION AS lib 
 
 FROM $BASE_IMAGE AS src
 
@@ -39,13 +40,9 @@ USER 26
     pgVersion = [ "18.0", ]
   }
   target = "${tgt}"
-  platforms = [
-    "linux/amd64",
-    "linux/arm64",
-  ]
   args = {
     BASE_IMAGE = "ghcr.io/cloudnative-pg/postgresql:${cleanVersion(pgVersion)}-system-trixie",
     EXTENSIONS = "${getExtensionsString(pgVersion, extensions)}",
-    LIBVERSION = "main"
+    LIBVERSION = "main-61b665a"
   }
 }
