@@ -3,7 +3,7 @@ FROM $BASE_IMAGE AS builder
 
 ENV CC=clang-21
 ENV CXX=clang++-21
-ENV CXXFLAGS="-stdlib=libc++"
+ENV CXXFLAGS="-s -stdlib=libc++"
 ENV LDFLAGS="-s -stdlib=libc++"
 ENV USE_PGXS=1
 ENV PGHOME=/usr/local/pgsql
@@ -12,6 +12,7 @@ ENV PATH="${PGHOME}/bin:${PATH}"
 # -----------------------------------------------------------------------------
 # 1. Install dependencies
 # -----------------------------------------------------------------------------
+
 RUN apt-get update && apt-get install -y \
     build-essential pkg-config curl wget gnupg lsb-release ca-certificates git \
     software-properties-common \
@@ -27,6 +28,7 @@ RUN apt-get update && apt-get install -y software-properties-common wget gnupg l
 # -----------------------------------------------------------------------------
 # 2. Build PostgreSQL 18 from source
 # -----------------------------------------------------------------------------
+
 WORKDIR /build
 RUN git clone --depth 1 --branch REL_18_STABLE https://github.com/postgres/postgres.git pg-source
 WORKDIR /build/pg-source
@@ -40,10 +42,13 @@ RUN ./configure \
 # -----------------------------------------------------------------------------
 # 3. Build pg_oauth against that PostgreSQL
 # -----------------------------------------------------------------------------
+
 WORKDIR /build
 RUN git clone --recurse-submodules https://github.com/Percona-Lab/pg_oauth.git
+
 WORKDIR /build/pg_oauth
 RUN make -j"$(nproc)" PG_CONFIG=${PGHOME}/bin/pg_config
+RUN strip pg_oauth.so
 
 # -----------------------------------------------------------------------------
 # 4. Default command: show resulting .so
