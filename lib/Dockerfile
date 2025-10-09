@@ -4,7 +4,7 @@ FROM $BASE_IMAGE AS builder
 ENV CC=clang-21
 ENV CXX=clang++-21
 ENV CXXFLAGS="-stdlib=libc++"
-ENV LDFLAGS="-stdlib=libc++"
+ENV LDFLAGS="-s -stdlib=libc++"
 ENV USE_PGXS=1
 ENV PGHOME=/usr/local/pgsql
 ENV PATH="${PGHOME}/bin:${PATH}"
@@ -32,7 +32,6 @@ RUN git clone --depth 1 --branch REL_18_STABLE https://github.com/postgres/postg
 WORKDIR /build/pg-source
 RUN ./configure \
       --prefix=${PGHOME} \
-      --enable-debug \
       --enable-cassert && \
     make -j"$(nproc)" && \
     make install && \
