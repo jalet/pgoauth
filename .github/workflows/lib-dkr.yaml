@@ -4,8 +4,6 @@ name: "lib - Docker"
 on:
   push:
     branches: ["main"]
-    tags:
-      - "v*.*.*"
     paths:
       - lib/**
       - .github/workflows/lib-dkr.yaml
@@ -38,7 +36,12 @@ jobs:
       - name: Create matrix
         id: platforms
         run: |
-          echo "matrix=$(docker buildx bake ${{ env.WORKING_DIR }}-all -f docker-bake.hcl -f ${{ env.WORKING_DIR }}/docker-bake.hcl --print | jq -cr '.target."${{ env.WORKING_DIR }}-all".platforms')" >> ${GITHUB_OUTPUT}
+          echo "matrix=$(docker buildx bake ${{ env.WORKING_DIR }}-all \
+              -f docker-bake.hcl \
+              -f ${{ env.WORKING_DIR }}/docker-bake.hcl \
+              --print | \
+              jq -cr '.target."${{ env.WORKING_DIR }}-all".platforms')" \
+          >> ${GITHUB_OUTPUT}
 
       - name: Show matrix
         run: |
