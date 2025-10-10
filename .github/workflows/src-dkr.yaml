@@ -40,7 +40,7 @@ jobs:
           echo "matrix=$(docker buildx bake ${{ env.WORKING_DIR }}-all \
             -f cwd://docker-bake.hcl \
             -f cwd://${{ env.WORKING_DIR }}/docker-bake.hcl \
-            "https://github.com/cloudnative-pg/postgres-containers.git" \
+            'https://github.com/cloudnative-pg/postgres-containers.git' \
             --print | \
             jq -cr '.target."${{ env.WORKING_DIR }}-all".platforms')" \
           >> ${GITHUB_OUTPUT}
