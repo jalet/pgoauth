@@ -33,6 +33,12 @@ RUN apt-get update && \
 
 COPY --from=lib pg_oauth.so /usr/lib/postgresql/18/lib/pg_oauth.so
 
+# Install runtime dependencies for pg_oauth
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libcurl4 && \
+    rm -rf /var/lib/apt/lists/*
+
 USER 26
   EOT
   matrix = {
