@@ -1,60 +1,29 @@
-ARG BASE_IMAGE="ubuntu:24.04"
-FROM $BASE_IMAGE AS builder
-
-ENV CC=clang-21
-ENV CXX=clang++-21
-ENV CXXFLAGS="-s -stdlib=libc++"
-ENV LDFLAGS="-s -stdlib=libc++"
+# -----------------------------------------------------------------------------
+# Stage 1 — build pg_oauth.so inside the same environment as CNPG Postgres 18
+# -----------------------------------------------------------------------------
+FROM ghcr.io/cloudnative-pg/postgresql:18.0 AS builder
+ENV DEBIAN_FRONTEND=noninteractive
 ENV USE_PGXS=1
-ENV PGHOME=/usr/local/pgsql
-ENV PATH="${PGHOME}/bin:${PATH}"
 
-# -----------------------------------------------------------------------------
-# 1. Install dependencies
-# -----------------------------------------------------------------------------
+# Install build tools and dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git pkg-config curl \
+    libcurl4-openssl-dev libjwt-dev libjansson-dev flex bison && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y \
-    build-essential pkg-config curl wget gnupg lsb-release ca-certificates git \
-    software-properties-common \
-    libjwt-dev libcurl4-openssl-dev libssl-dev libreadline-dev zlib1g-dev \
-    libxml2-dev libxslt1-dev uuid-dev flex bison
-
-RUN apt-get update && apt-get install -y software-properties-common wget gnupg lsb-release && \
-    wget -nv -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
-    add-apt-repository "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-21 main" && \
-    apt-get update && \
-    apt-get install -y clang-21 lldb-21 lld-21 libc++-21-dev libc++abi-21-dev
-
-# -----------------------------------------------------------------------------
-# 2. Build PostgreSQL 18 from source
-# -----------------------------------------------------------------------------
-
+# Clone the Percona source
 WORKDIR /build
-RUN git clone --depth 1 --branch REL_18_STABLE https://github.com/postgres/postgres.git pg-source
-WORKDIR /build/pg-source
-RUN ./configure \
-      --prefix=${PGHOME} \
-      --enable-cassert && \
-    make -j"$(nproc)" && \
-    make install && \
-    ldconfig
+RUN git clone --recurse-submodules https://github.com/Percona-Lab/pg_oauth.git pg_oauth
 
-# -----------------------------------------------------------------------------
-# 3. Build pg_oauth against that PostgreSQL
-# -----------------------------------------------------------------------------
-
-WORKDIR /build
-RUN git clone --recurse-submodules https://github.com/Percona-Lab/pg_oauth.git
-
+# Build the module using PGXS from the CNPG image
 WORKDIR /build/pg_oauth
-RUN make -j"$(nproc)" PG_CONFIG=${PGHOME}/bin/pg_config
+RUN make USE_PGXS=1 PG_CONFIG=/usr/lib/postgresql/18/bin/pg_config
 RUN strip pg_oauth.so
 
 # -----------------------------------------------------------------------------
-# 4. Default command: show resulting .so
+# Stage 2 — export or package the built .so
 # -----------------------------------------------------------------------------
-FROM alpine:3
-
+# Option A: minimal image containing only the library (for copying or initContainer)
+FROM busybox:uclibc AS export
 COPY --from=builder /build/pg_oauth/pg_oauth.so /pg_oauth.so
-RUN apk add --no-cache file
-CMD ["file", "/pg_oauth.so"]
+CMD ["ls", "-lh", "/pg_oauth.so"]
