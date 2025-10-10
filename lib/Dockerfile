@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y \
 # -----------------------------------------------------------------------------
 WORKDIR /pgsrc
 RUN git clone --depth 1 --branch REL_18_STABLE https://github.com/postgres/postgres.git .
-RUN ./configure --prefix=${PGHOME} --enable-cassert && \
+RUN ./configure --prefix=${PGHOME} --enable-cassert --without-readline && \
     make -j"$(nproc)" && \
     make install && \
     ldconfig
