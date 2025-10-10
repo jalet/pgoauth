@@ -36,10 +36,10 @@ jobs:
       - name: Create matrix
         id: platforms
         run: |
-          echo "matrix=$(docker buildx bake ${{ env.WORKING_DIR }}-all \
+          echo "matrix=$(docker buildx bake \
               -f docker-bake.hcl \
               -f ${{ env.WORKING_DIR }}/docker-bake.hcl \
-              --print | \
+               ${{ env.WORKING_DIR }}-all --print | \
               jq -cr '.target."${{ env.WORKING_DIR }}-all".platforms')" \
           >> ${GITHUB_OUTPUT}
 
