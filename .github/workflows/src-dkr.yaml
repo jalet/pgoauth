@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       platforms:   ${{ steps.platforms.outputs.platforms }}
-      pg_versions: ${{ env.PG_VERSIONS }}
+      pg_versions: ${{ steps.pg_versions.outputs.pg_versions }}
 
     steps:
       - name: Checkout
@@ -47,10 +47,14 @@ jobs:
             jq -cr '.target."${{ env.WORKING_DIR }}-all".platforms')" \
           >> ${GITHUB_OUTPUT}
 
+      - name: Export pg_versions
+        id: pg_versions
+        run: echo "pg_versions=${{ env.PG_VERSIONS }}" >> ${GITHUB_OUTPUT}
+
       - name: Show matrix
         run: |
           echo "platforms: ${{ steps.platforms.outputs.platforms }}"
-          echo "pg_versions: ${{ env.PG_VERSIONS }}"
+          echo "pg_versions: ${{ steps.pg_versions.outputs.pg_versions }}"
 
       - name: Docker meta
         id: meta_std
