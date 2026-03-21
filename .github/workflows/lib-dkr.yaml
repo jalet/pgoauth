@@ -86,6 +86,19 @@ jobs:
         with:
           toolchain: "1.94"
 
+      - name: Install PostgreSQL 18 dev headers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends curl gnupg ca-certificates
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          echo "deb [signed-by=/etc/apt/trusted.gpg.d/pgdg.gpg] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            postgresql-server-dev-18 clang
+
       - name: Cache Cargo registry
         uses: actions/cache@v4
         with:
@@ -97,6 +110,8 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Run unit tests
+        env:
+          PGRX_PG_CONFIG_PATH: /usr/bin/pg_config
         run: cd lib/src && cargo test --locked --features pg18
 
   build:
