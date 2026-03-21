@@ -1,0 +1,57 @@
+services:
+  jwks:
+    image: nginx:alpine
+    volumes:
+      - ../lib/src/tests/fixtures/jwks_rsa.json:/usr/share/nginx/html/jwks.json:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/jwks.json"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+
+  oauth-server:
+    image: python:3-slim
+    volumes:
+      - ./mock_oauth.py:/mock_oauth.py:ro
+      - ../lib/src/tests/fixtures:/fixtures:ro
+    command:
+      - bash
+      - -c
+      - "pip install pyjwt cryptography -q && python /mock_oauth.py"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost/.well-known/openid-configuration\")'"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  postgres:
+    image: local
+    environment:
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        PGBINDIR=/usr/lib/postgresql/18/bin
+        if [ ! -f "$$PGDATA/PG_VERSION" ]; then
+          $$PGBINDIR/initdb -D $$PGDATA --auth-local=trust --auth-host=md5 -U postgres
+        fi
+        exec $$PGBINDIR/postgres -D $$PGDATA -c config_file=/etc/postgresql/postgresql.conf
+    ports:
+      - "5432:5432"
+    depends_on:
+      jwks:
+        condition: service_healthy
+      oauth-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
