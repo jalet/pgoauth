@@ -18,6 +18,8 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: jalet/postgresql
   WORKING_DIR: src
+  # Add or remove PostgreSQL minor versions here.
+  PG_VERSIONS: '["18.1","18.2","18.3"]'
 
 permissions:
   contents: read
@@ -28,26 +30,27 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.platforms.outputs.matrix }}
+      platforms:   ${{ steps.platforms.outputs.platforms }}
+      pg_versions: ${{ env.PG_VERSIONS }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create matrix
+      - name: Create platform matrix
         id: platforms
         run: |
-          echo "matrix=$(docker buildx bake \
-            -f cwd://docker-bake.hcl \
-            -f cwd://${{ env.WORKING_DIR }}/docker-bake.hcl \
-            'https://github.com/cloudnative-pg/postgres-containers.git' \
+          echo "platforms=$(docker buildx bake \
+            -f docker-bake.hcl \
+            -f ${{ env.WORKING_DIR }}/docker-bake.hcl \
             ${{ env.WORKING_DIR }}-all --print | \
             jq -cr '.target."${{ env.WORKING_DIR }}-all".platforms')" \
           >> ${GITHUB_OUTPUT}
 
       - name: Show matrix
         run: |
-          echo ${{ steps.platforms.outputs.matrix }}
+          echo "platforms: ${{ steps.platforms.outputs.platforms }}"
+          echo "pg_versions: ${{ env.PG_VERSIONS }}"
 
       - name: Docker meta
         id: meta_std
@@ -59,7 +62,6 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha,prefix={{branch}}-,format=long
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Rename meta bake definition file
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -74,7 +76,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}
             type=semver,pattern={{major}}.{{minor}}
 
       - name: Rename meta bake definition file
@@ -91,14 +92,15 @@ jobs:
           retention-days: 1
 
   build:
-    runs-on: ${{ startsWith(matrix.platforms, 'linux/arm') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    runs-on: ${{ startsWith(matrix.platform, 'linux/arm') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     needs:
       - prepare
 
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJson(needs.prepare.outputs.matrix) }}
+        platform:   ${{ fromJson(needs.prepare.outputs.platforms) }}
+        pg_version: ${{ fromJson(needs.prepare.outputs.pg_versions) }}
 
     steps:
       - name: Checkout
@@ -130,7 +132,6 @@ jobs:
         uses: docker/bake-action@v6
         with:
           targets: ${{ env.WORKING_DIR }}
-          source: "https://github.com/cloudnative-pg/postgres-containers.git"
           files: |
             cwd://docker-bake.hcl
             cwd://${{ env.WORKING_DIR }}/docker-bake.hcl
@@ -138,6 +139,7 @@ jobs:
           set: |
             *.tags=ghcr.io/${{ env.IMAGE_NAME }}
             *.platform=${{ matrix.platform }}
+            *.args.PG_VERSION=${{ matrix.pg_version }}
             *.output=type=image,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
@@ -146,10 +148,11 @@ jobs:
           digest="${{ fromJSON(steps.bake.outputs.metadata)[env.WORKING_DIR]['containerimage.digest'] }}"
           touch "${{ runner.temp }}/digests/${digest#sha256:}"
 
+      # Artifact name encodes the pg_version so the merge job can filter by it.
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ env.PLATFORM_PAIR }}
+          name: digests-${{ matrix.pg_version }}-${{ env.PLATFORM_PAIR }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -158,7 +161,15 @@ jobs:
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     needs:
+      - prepare
       - build
+
+    # One manifest list per PostgreSQL version.
+    strategy:
+      fail-fast: false
+      matrix:
+        pg_version: ${{ fromJson(needs.prepare.outputs.pg_versions) }}
+
     steps:
       - name: Download meta bake definition
         uses: actions/download-artifact@v4
@@ -166,11 +177,12 @@ jobs:
           name: bake-meta
           path: ${{ runner.temp }}
 
-      - name: Download digests
+      # Only download digests that belong to this pg_version.
+      - name: Download digests for ${{ matrix.pg_version }}
         uses: actions/download-artifact@v4
         with:
           path: ${{ runner.temp }}/digests
-          pattern: digests-*
+          pattern: digests-${{ matrix.pg_version }}-*
           merge-multiple: true
 
       - name: Log into registry ${{ env.REGISTRY }}
@@ -183,15 +195,29 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Tags produced per version:
+      #   <pg_version>                    e.g. 18.1
+      #   <pg_version>-<branch>           e.g. 18.1-main
+      #   <pg_version>-<branch>-<sha>     e.g. 18.1-main-abc1234  (branch builds)
+      #   <pg_version>-<semver>           e.g. 18.1-1.2.3         (tag builds)
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
+          PGV="${{ matrix.pg_version }}"
+          # Build a -t argument for every tag from the bake-meta, prefixing the
+          # image tag value with the pg_version so tags are version-scoped.
+          VERSION_TAGS=$(jq -cr --arg pgv "$PGV" \
+            '.target."docker-metadata-action".tags
+             | map("-t " + (gsub("(?<img>[^:]+):(?<tag>.+)"; "\(.img):\($pgv)-\(.tag)")))
+             | join(" ")' \
+            ${{ runner.temp }}/bake-meta.json)
+
           docker buildx imagetools create \
-            $(jq -cr '.target."docker-metadata-action".tags | map("-t " + .) | join(" ")' \
-            ${{ runner.temp }}/bake-meta.json) \
-            $(printf '${{ env.REGISTRY}}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+            -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${PGV} \
+            ${VERSION_TAGS} \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect image
         run: |
           docker buildx imagetools inspect \
-            ${{ env.REGISTRY}}/${{ env.IMAGE_NAME }}:$(jq -r '.target."docker-metadata-action".args.DOCKER_META_VERSION' ${{ runner.temp }}/bake-meta.json)
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.pg_version }}
