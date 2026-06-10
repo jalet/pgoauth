@@ -1,9 +1,10 @@
 ---
-name: "lib - Docker"
+name: "extension image - Docker"
 
 on:
   push:
     branches: ["main"]
+    tags: ["v*.*.*"]
     paths:
       - lib/**
       - .github/workflows/lib-dkr.yaml
@@ -12,10 +13,12 @@ on:
     paths:
       - lib/**
       - .github/workflows/lib-dkr.yaml
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: jalet/postgres-oauth-lib
+  # CNPG extension image (image-volume content: /lib/pg_oauth.so).
+  IMAGE_NAME: jalet/pg-oauth
   WORKING_DIR: lib
 
 permissions:

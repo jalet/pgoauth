@@ -26,13 +26,19 @@ services:
       start_period: 60s
 
   postgres:
-    image: local
+    # Stock CNPG operand image (NO baked-in extension). The validator .so is
+    # supplied the way CloudNativePG does in production: mounted into the pod and
+    # found via dynamic_library_path (see postgresql.conf). Here the mount is a
+    # bind mount of the extension image's /lib (staged by `make build` into
+    # test/ext/lib); in a cluster it is a Kubernetes ImageVolume.
+    image: ghcr.io/cloudnative-pg/postgresql:18.0-system-trixie
     environment:
       POSTGRES_PASSWORD: postgres
       PGDATA: /var/lib/postgresql/data
     volumes:
       - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
       - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./ext/lib:/extensions/pg_oauth/lib:ro
     entrypoint:
       - bash
       - -c

@@ -2,11 +2,12 @@
 .PHONY: help build unit-test up down token connect test-oauth test-oauth-expired test-oauth-forbidden test-symbol test clean
 
 PG_VERSION  ?= 18.0
+PG_IMAGE    ?= ghcr.io/cloudnative-pg/postgresql:$(PG_VERSION)-system-trixie
 COMPOSE      = docker compose -f test/docker-compose.yml
 PSQL         = docker run --rm --user root --network test_default \
                -e PGOAUTHDEBUG=UNSAFE \
                -v $(CURDIR)/test/run-psql.sh:/run-psql.sh:ro \
-               local bash /run-psql.sh
+               $(PG_IMAGE) bash /run-psql.sh
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 
@@ -16,12 +17,10 @@ help:
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
-build: ## Build the local Docker image (PG_VERSION=18.0)
-	docker buildx bake \
-		-f docker-bake.hcl \
-		-f src/docker-bake.hcl \
-		src-local \
-		--set "*.args.BASE_IMAGE=ghcr.io/cloudnative-pg/postgresql:$(PG_VERSION)-system-trixie"
+build: ## Build the CNPG extension image; stage its /lib and /share into test/ext
+	@rm -rf test/ext
+	docker buildx build -f lib/Dockerfile --target final -o type=local,dest=test/ext .
+	@echo "Staged extension files:" && find test/ext -type f
 
 # ── Unit tests ────────────────────────────────────────────────────────────────
 
@@ -34,7 +33,7 @@ unit-test: ## Run Rust unit tests (uses the pg18 install from ~/.pgrx/config.tom
 
 # ── Integration test environment ─────────────────────────────────────────────
 
-up: ## Start postgres + jwks containers
+up: build ## Build the extension, then start postgres + jwks + mock IdP
 	$(COMPOSE) up -d --wait
 	@echo "Waiting for postgres..."
 	@# app_reader is granted by the token's realm_access.roles; dba is not.
@@ -52,16 +51,12 @@ token: ## Print a fresh test JWT (pip install pyjwt cryptography if missing)
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
-test-symbol: ## Verify _PG_oauth_validator_module_init is exported from the .so
+test-symbol: build ## Verify _PG_oauth_validator_module_init is exported from the .so
 	@echo "==> Checking exported symbol..."
-	@cid=$$(docker create local); \
-	docker cp $$cid:/usr/lib/postgresql/18/lib/pg_oauth.so $(CURDIR)/.symcheck.so; \
-	docker rm $$cid >/dev/null; \
-	docker run --rm -v $(CURDIR):/work:ro debian:trixie-slim \
+	@docker run --rm -v $(CURDIR)/test/ext/lib:/x:ro debian:trixie-slim \
 	  sh -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq binutils >/dev/null 2>&1 && \
-	         nm -D /work/.symcheck.so | grep -q _PG_oauth_validator_module_init'; \
-	rc=$$?; rm -f $(CURDIR)/.symcheck.so; \
-	[ $$rc -eq 0 ] && echo "PASS: symbol present" || (echo "FAIL: symbol missing"; exit 1)
+	         nm -D /x/pg_oauth.so | grep -q _PG_oauth_validator_module_init' \
+	  && echo "PASS: symbol present" || (echo "FAIL: symbol missing"; exit 1)
 
 test-oauth: up ## Login as a role granted by the token's roles claim (succeeds)
 	@echo "==> Connecting as app_reader (granted by token realm_access.roles)..."
@@ -97,5 +92,5 @@ test: build test-symbol unit-test test-oauth test-oauth-forbidden test-oauth-exp
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
-clean: down ## Remove containers and the local Docker image
-	docker image rm local 2>/dev/null || true
+clean: down ## Remove containers and staged extension files
+	@rm -rf test/ext

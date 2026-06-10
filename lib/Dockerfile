@@ -36,15 +36,20 @@ COPY lib/src/ .
 # cargo build --release is sufficient: we are a validator module, not a
 # CREATE EXTENSION extension, so no .control file is needed.
 # Rust names the cdylib libpg_oauth.so; rename to pg_oauth.so for PostgreSQL.
+#
+# Stage the CloudNativePG extension-image layout under /out:
+#   /lib/pg_oauth.so      -> mounted at /extensions/pg_oauth/lib (dynamic_library_path)
+#   /share/extension/     -> mounted at /extensions/pg_oauth/share (empty: no SQL
+#                            objects, since this is an OAuth validator module)
 RUN cargo build --release --features pg18 \
     && cp target/release/libpg_oauth.so target/release/pg_oauth.so \
-    && strip target/release/pg_oauth.so
+    && strip target/release/pg_oauth.so \
+    && mkdir -p /out/lib /out/share/extension \
+    && cp target/release/pg_oauth.so /out/lib/pg_oauth.so
 
-# ── Stage 2: minimal artifact image ────────────────────────────────────────
-FROM ubuntu:24.04 AS final
+# ── Stage 2: CNPG extension image (image-volume content only) ───────────────
+# A scratch image holding just the files CloudNativePG mounts into the Postgres
+# pod via a Kubernetes ImageVolume. Not a runnable image.
+FROM scratch AS final
 
-WORKDIR /artifacts
-
-COPY --from=builder /build/target/release/pg_oauth.so ./
-
-CMD ["bash", "-c", "echo 'Artifacts:' && ls -lh /artifacts/"]
+COPY --from=builder /out/ /
