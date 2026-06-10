@@ -228,12 +228,9 @@ You ran PostgreSQL 18 that:
 
 ## Next steps
 
-- Deploy this to a real CloudNativePG 1.29 cluster. CNPG mounts an extension
-  image into the Postgres pods as a Kubernetes ImageVolume, so you reference the
-  published `ghcr.io/jalet/pg-oauth` image under `spec.postgresql.extensions`,
-  set `oauth_validator_libraries = 'pg_oauth'`, and add an `oauth` rule to
-  `pg_hba` with `delegate_ident_mapping=1`. The CloudNativePG guide covers the
-  cluster fields: <https://cloudnative-pg.io/docs/1.29/imagevolume_extensions/>.
+- Deploy this to a real CloudNativePG 1.29 cluster, including the identity
+  provider setup and troubleshooting:
+  [Deploy pg_oauth to a CloudNativePG cluster](./deploy-pg-oauth-to-cloudnativepg.md).
 - Control which roles a token may assume with the `pg_oauth.roles_claim`
   setting, and assign the matching realm roles to users in your identity
   provider so the claim carries them.
