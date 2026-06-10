@@ -19,6 +19,7 @@ claims = {
     "aud":   "postgresql",
     "sub":   "testuser",
     "scope": "db:read",
+    "realm_access": {"roles": ["app_reader"]},
     "exp":   now + 3600,
     "iat":   now,
     "kid":   "test-rsa-key",

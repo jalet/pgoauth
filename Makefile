@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build unit-test up down token connect test-oauth test-symbol clean
+.PHONY: help build unit-test up down token connect test-oauth test-oauth-expired test-oauth-forbidden test-symbol test clean
 
 PG_VERSION  ?= 18.0
 COMPOSE      = docker compose -f test/docker-compose.yml
@@ -37,8 +37,11 @@ unit-test: ## Run Rust unit tests (uses the pg18 install from ~/.pgrx/config.tom
 up: ## Start postgres + jwks containers
 	$(COMPOSE) up -d --wait
 	@echo "Waiting for postgres..."
+	@# app_reader is granted by the token's realm_access.roles; dba is not.
 	@$(COMPOSE) exec postgres \
-		psql -U postgres -c "CREATE USER testuser LOGIN;" 2>/dev/null || true
+		psql -U postgres -c "CREATE ROLE app_reader LOGIN;" 2>/dev/null || true
+	@$(COMPOSE) exec postgres \
+		psql -U postgres -c "CREATE ROLE dba LOGIN;" 2>/dev/null || true
 	@echo "Ready."
 
 down: ## Stop and remove test containers
@@ -60,18 +63,27 @@ test-symbol: ## Verify _PG_oauth_validator_module_init is exported from the .so
 	rc=$$?; rm -f $(CURDIR)/.symcheck.so; \
 	[ $$rc -eq 0 ] && echo "PASS: symbol present" || (echo "FAIL: symbol missing"; exit 1)
 
-test-oauth: up ## Full OAuth login test (valid token → connect succeeds)
-	@echo "==> Connecting with valid token..."
+test-oauth: up ## Login as a role granted by the token's roles claim (succeeds)
+	@echo "==> Connecting as app_reader (granted by token realm_access.roles)..."
 	$(PSQL) \
-		"host=postgres port=5432 user=testuser dbname=postgres \
+		"host=postgres port=5432 user=app_reader dbname=postgres \
 		 sslmode=disable oauth_issuer=http://oauth-server oauth_client_id=test" \
 		-c "SELECT current_user, now();" \
 		&& echo "PASS: OAuth login succeeded" || (echo "FAIL: OAuth login failed"; exit 1)
 
+test-oauth-forbidden: up ## Login as a role NOT in the token (must be rejected)
+	@echo "==> Connecting as dba (NOT granted by token realm_access.roles)..."
+	$(PSQL) \
+		"host=postgres port=5432 user=dba dbname=postgres \
+		 sslmode=disable oauth_issuer=http://oauth-server oauth_client_id=test" \
+		-c "SELECT 1;" 2>&1 \
+		| grep -q "authentication failed\|FATAL" \
+		&& echo "PASS: un-granted role correctly rejected" || (echo "FAIL: un-granted role was accepted"; exit 1)
+
 test-oauth-expired: up ## Verify an expired token is rejected
 	@echo "==> Connecting with expired token (should be rejected)..."
 	$(PSQL) \
-		"host=postgres port=5432 user=testuser dbname=postgres \
+		"host=postgres port=5432 user=app_reader dbname=postgres \
 		 sslmode=disable oauth_issuer=http://oauth-server oauth_client_id=expired-test" \
 		-c "SELECT 1;" 2>&1 \
 		| grep -q "authentication failed\|FATAL" \
@@ -79,7 +91,7 @@ test-oauth-expired: up ## Verify an expired token is rejected
 
 # ── Combined ──────────────────────────────────────────────────────────────────
 
-test: build test-symbol unit-test test-oauth test-oauth-expired ## Run all tests
+test: build test-symbol unit-test test-oauth test-oauth-forbidden test-oauth-expired ## Run all tests
 	@echo ""
 	@echo "All tests passed."
 

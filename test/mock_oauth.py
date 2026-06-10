@@ -32,6 +32,9 @@ def _make_token(expired: bool = False) -> str:
         "aud":   "postgresql",
         "sub":   "testuser",
         "scope": "db:read",
+        # Roles the subject may assume in Postgres (Option C). Independent of
+        # "sub": the IdP grants app_reader, NOT a role named "testuser".
+        "realm_access": {"roles": ["app_reader"]},
         "iat":   now - 3610 if expired else now,
         "exp":   now - 10  if expired else now + 3600,
         "kid":   "test-rsa-key",

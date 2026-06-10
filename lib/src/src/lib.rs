@@ -78,6 +78,7 @@ static mut GUC_ISSUER:         *mut c_char = std::ptr::null_mut();
 static mut GUC_AUDIENCE:       *mut c_char = std::ptr::null_mut();
 static mut GUC_REQUIRED_SCOPE: *mut c_char = std::ptr::null_mut();
 static mut GUC_SCOPE_CLAIM:    *mut c_char = std::ptr::null_mut();
+static mut GUC_ROLES_CLAIM:    *mut c_char = std::ptr::null_mut();
 static mut GUC_CACHE_TTL_SECS: i32         = 300;
 
 // ---------------------------------------------------------------------------
@@ -91,6 +92,14 @@ pub struct ValidatorConfig {
     pub audience:       Option<String>,
     pub required_scope: Option<String>,
     pub scope_claim:    String,
+    /// Claim listing the Postgres roles the subject may assume, as a dotted
+    /// path (e.g. `realm_access.roles`). When set, the validator only authorizes
+    /// a connection whose requested role appears in this claim -- this is the
+    /// `delegate_ident_mapping=1` model where the IdP (e.g. Keycloak) drives
+    /// which Postgres roles a user may log in as. When `None`, the validator
+    /// authenticates only (authn_id = sub) and leaves role mapping to
+    /// PostgreSQL's pg_ident.conf / default identity check.
+    pub roles_claim:    Option<String>,
     pub cache_ttl:      Duration,
 }
 
@@ -117,6 +126,38 @@ pub fn check_scope(token_scopes: &str, required: &str) -> bool {
     token_scopes.split_whitespace().any(|s| s == required)
 }
 
+/// Follow a dotted claim path (e.g. `realm_access.roles`) into a JSON value.
+fn claim_path<'a>(claims: &'a Value, path: &str) -> Option<&'a Value> {
+    let mut current = claims;
+    for segment in path.split('.') {
+        current = current.get(segment)?;
+    }
+    Some(current)
+}
+
+/// Extract a list of roles from the claim at `path`. Accepts either a JSON
+/// array of strings (`["app_reader","app_writer"]`) or a space-delimited
+/// string (`"app_reader app_writer"`). Returns empty if absent or wrong type.
+pub fn extract_roles(claims: &Value, path: &str) -> Vec<String> {
+    match claim_path(claims, path) {
+        Some(Value::Array(arr)) => arr
+            .iter()
+            .filter_map(Value::as_str)
+            .map(String::from)
+            .collect(),
+        Some(Value::String(s)) => s.split_whitespace().map(String::from).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Decide whether a connection requesting `role` is authorized given the roles
+/// granted by the token. Authorized iff `role` is non-empty and present in
+/// `granted`. This is the `delegate_ident_mapping=1` check: the IdP's claim is
+/// the source of truth for which Postgres roles a subject may assume.
+pub fn role_authorized(role: &str, granted: &[String]) -> bool {
+    !role.is_empty() && granted.iter().any(|r| r == role)
+}
+
 /// Fetch a JWKS document from `uri` and parse it.
 pub fn fetch_jwks(uri: &str) -> Result<JwkSet, String> {
     let response = ureq::get(uri)
@@ -137,6 +178,9 @@ pub struct TokenClaims {
     pub sub:    Option<String>,
     /// Raw scope string from the configured claim.
     pub scopes: String,
+    /// Roles the subject may assume, from the configured `roles_claim`.
+    /// Empty when no `roles_claim` is configured or the claim is absent.
+    pub roles:  Vec<String>,
 }
 
 /// Algorithm allowlist — symmetric and `none` are forbidden.
@@ -238,7 +282,13 @@ pub fn validate_token(
         .and_then(Value::as_str)
         .map(String::from);
 
-    Ok(TokenClaims { sub, scopes })
+    // 7. Extract roles from the configured claim (for delegate_ident_mapping).
+    let roles = match &config.roles_claim {
+        Some(path) => extract_roles(&claims, path),
+        None => Vec::new(),
+    };
+
+    Ok(TokenClaims { sub, scopes, roles })
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +328,7 @@ unsafe extern "C" fn startup_cb(state: *mut ValidatorModuleState) {
         audience:       guc_str(GUC_AUDIENCE),
         required_scope: guc_str(GUC_REQUIRED_SCOPE),
         scope_claim:    guc_str(GUC_SCOPE_CLAIM).unwrap_or_else(|| "scope".to_string()),
+        roles_claim:    guc_str(GUC_ROLES_CLAIM),
         cache_ttl:      Duration::from_secs(GUC_CACHE_TTL_SECS.max(1) as u64),
     };
 
@@ -302,13 +353,13 @@ unsafe extern "C" fn shutdown_cb(state: *mut ValidatorModuleState) {
 unsafe extern "C" fn validate_cb(
     state:     *const ValidatorModuleState,
     token_ptr: *const c_char,
-    _role:     *const c_char,
+    role_ptr:  *const c_char,
     result:    *mut ValidatorModuleResult,
 ) -> bool {
     // Wrap everything in catch_unwind so we never unwind through C frames in
     // debug / test builds.  (In release panic=abort makes this a no-op.)
     let outcome = std::panic::catch_unwind(|| {
-        validate_cb_inner(state, token_ptr, result)
+        validate_cb_inner(state, token_ptr, role_ptr, result)
     });
     match outcome {
         Ok(v) => v,
@@ -325,6 +376,7 @@ unsafe extern "C" fn validate_cb(
 unsafe fn validate_cb_inner(
     state:     *const ValidatorModuleState,
     token_ptr: *const c_char,
+    role_ptr:  *const c_char,
     result:    *mut ValidatorModuleResult,
 ) -> bool {
     // Deny by default.
@@ -368,6 +420,13 @@ unsafe fn validate_cb_inner(
         None => return true,
     };
 
+    // Requested Postgres role (the connection's user=); empty if null.
+    let role = if role_ptr.is_null() {
+        ""
+    } else {
+        CStr::from_ptr(role_ptr).to_str().unwrap_or("")
+    };
+
     // Validate the token.
     let claims = match validate_token(token, jwks, &internal.config) {
         Ok(c) => c,
@@ -384,6 +443,15 @@ unsafe fn validate_cb_inner(
         .unwrap_or("");
 
     if !check_scope(&claims.scopes, required) {
+        return true;
+    }
+
+    // Role authorization (delegate_ident_mapping=1 model). When a roles_claim
+    // is configured, the requested role MUST be granted by the token, so the
+    // IdP controls which Postgres roles a subject may assume. When no
+    // roles_claim is configured, role mapping is left to PostgreSQL
+    // (pg_ident.conf / default identity check) and we rely on authn_id alone.
+    if internal.config.roles_claim.is_some() && !role_authorized(role, &claims.roles) {
         return true;
     }
 
@@ -477,6 +545,19 @@ unsafe fn register_gucs() {
         None,
     );
 
+    DefineCustomStringVariable(
+        c"pg_oauth.roles_claim".as_ptr(),
+        c"Dotted JWT claim path listing the Postgres roles the subject may assume (e.g. realm_access.roles). When set, the requested role must appear in this claim (use with pg_hba delegate_ident_mapping=1). When unset, role mapping is left to PostgreSQL.".as_ptr(),
+        std::ptr::null(),
+        &raw mut GUC_ROLES_CLAIM,
+        std::ptr::null(),
+        PGC_SIGHUP,
+        no_flags,
+        None,
+        None,
+        None,
+    );
+
     DefineCustomIntVariable(
         c"pg_oauth.jwks_cache_ttl".as_ptr(),
         c"How long (seconds) to cache the JWKS before re-fetching.".as_ptr(),
@@ -543,6 +624,7 @@ mod tests {
             "iss":   "https://test.example.com/",
             "aud":   "pg",
             "scope": "db:connect",
+            "realm_access": { "roles": ["app_reader", "app_writer"] },
             "exp":   now_unix() + 3600,
             "iat":   now_unix(),
         })
@@ -555,6 +637,7 @@ mod tests {
             audience:       Some("pg".to_string()),
             required_scope: Some("db:connect".to_string()),
             scope_claim:    "scope".to_string(),
+            roles_claim:    Some("realm_access.roles".to_string()),
             cache_ttl:      Duration::from_secs(300),
         }
     }
@@ -885,5 +968,67 @@ mod tests {
         let token = mint_rs256(claims, "test-rsa-key");
         let config = test_config();
         assert!(validate_token(&token, &jwks, &config).is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // Group 7: role extraction + role authorization (Option C)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn roles_from_array_via_dotted_path() {
+        let claims = json!({"realm_access": {"roles": ["app_reader", "app_writer"]}});
+        let roles = extract_roles(&claims, "realm_access.roles");
+        assert_eq!(roles, vec!["app_reader".to_string(), "app_writer".to_string()]);
+    }
+
+    #[test]
+    fn roles_from_space_delimited_string() {
+        let claims = json!({"roles": "app_reader app_writer"});
+        let roles = extract_roles(&claims, "roles");
+        assert_eq!(roles, vec!["app_reader".to_string(), "app_writer".to_string()]);
+    }
+
+    #[test]
+    fn roles_absent_or_wrong_type_is_empty() {
+        assert!(extract_roles(&json!({}), "realm_access.roles").is_empty());
+        assert!(extract_roles(&json!({"roles": 42}), "roles").is_empty());
+    }
+
+    #[test]
+    fn role_authorized_requires_membership() {
+        let granted = vec!["app_reader".to_string(), "app_writer".to_string()];
+        assert!(role_authorized("app_reader", &granted));
+        assert!(role_authorized("app_writer", &granted));
+        assert!(!role_authorized("dba", &granted));
+    }
+
+    #[test]
+    fn role_authorized_denies_empty_role() {
+        let granted = vec!["app_reader".to_string()];
+        assert!(!role_authorized("", &granted));
+    }
+
+    #[test]
+    fn role_authorized_denies_when_no_roles_granted() {
+        assert!(!role_authorized("app_reader", &[]));
+    }
+
+    #[test]
+    fn validate_token_populates_roles_from_config_claim() {
+        let jwks: JwkSet = serde_json::from_str(JWKS_RSA).unwrap();
+        let token = mint_rs256(valid_claims(), "test-rsa-key");
+        let claims = validate_token(&token, &jwks, &test_config()).unwrap();
+        assert!(role_authorized("app_reader", &claims.roles));
+        assert!(!role_authorized("dba", &claims.roles));
+    }
+
+    #[test]
+    fn validate_token_roles_empty_when_no_roles_claim_configured() {
+        let jwks: JwkSet = serde_json::from_str(JWKS_RSA).unwrap();
+        let token = mint_rs256(valid_claims(), "test-rsa-key");
+        let mut config = test_config();
+        config.roles_claim = None;
+        let claims = validate_token(&token, &jwks, &config).unwrap();
+        assert!(claims.roles.is_empty());
     }
 }
