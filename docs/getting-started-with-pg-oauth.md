@@ -229,8 +229,9 @@ You ran PostgreSQL 18 that:
 ## Next steps
 
 - Deploy this to a real CloudNativePG 1.29 cluster, including the identity
-  provider setup and troubleshooting:
-  [Deploy pg_oauth to a CloudNativePG cluster](./deploy-pg-oauth-to-cloudnativepg.md).
+  provider setup and troubleshooting -- see the [deployment how-to][deploy].
 - Control which roles a token may assume with the `pg_oauth.roles_claim`
   setting, and assign the matching realm roles to users in your identity
   provider so the claim carries them.
+
+[deploy]: ./deploy-pg-oauth-to-cloudnativepg.md
