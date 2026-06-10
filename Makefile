@@ -47,10 +47,14 @@ token: ## Print a fresh test JWT (pip install pyjwt cryptography if missing)
 
 test-symbol: ## Verify _PG_oauth_validator_module_init is exported from the .so
 	@echo "==> Checking exported symbol..."
-	docker run --rm local \
-		nm -D /usr/lib/postgresql/18/lib/pg_oauth.so \
-		| grep -q _PG_oauth_validator_module_init \
-		&& echo "PASS: symbol present" || (echo "FAIL: symbol missing"; exit 1)
+	@cid=$$(docker create local); \
+	docker cp $$cid:/usr/lib/postgresql/18/lib/pg_oauth.so $(CURDIR)/.symcheck.so; \
+	docker rm $$cid >/dev/null; \
+	docker run --rm -v $(CURDIR):/work:ro debian:trixie-slim \
+	  sh -c 'apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq binutils >/dev/null 2>&1 && \
+	         nm -D /work/.symcheck.so | grep -q _PG_oauth_validator_module_init'; \
+	rc=$$?; rm -f $(CURDIR)/.symcheck.so; \
+	[ $$rc -eq 0 ] && echo "PASS: symbol present" || (echo "FAIL: symbol missing"; exit 1)
 
 test-oauth: up ## Full OAuth login test (valid token → connect succeeds)
 	@echo "==> Connecting with valid token..."
