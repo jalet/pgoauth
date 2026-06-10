@@ -25,8 +25,12 @@ build: ## Build the local Docker image (PG_VERSION=18.0)
 
 # ── Unit tests ────────────────────────────────────────────────────────────────
 
-unit-test: ## Run Rust unit tests (requires postgresql-server-dev-18 + clang)
-	cd lib/src && PGRX_PG_CONFIG_PATH=$$(which pg_config) cargo test --features pg18
+unit-test: ## Run Rust unit tests (uses the pg18 install from ~/.pgrx/config.toml)
+	cd lib/src && \
+	if command -v xcrun >/dev/null 2>&1; then \
+	  export BINDGEN_EXTRA_CLANG_ARGS="-isysroot $$(xcrun --show-sdk-path)"; \
+	fi; \
+	cargo test --features pg18
 
 # ── Integration test environment ─────────────────────────────────────────────
 
