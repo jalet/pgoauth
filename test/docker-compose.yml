@@ -2,7 +2,7 @@ services:
   jwks:
     image: nginx:alpine
     volumes:
-      - ../lib/src/tests/fixtures/jwks_rsa.json:/usr/share/nginx/html/jwks.json:ro
+      - ../lib/tests/fixtures/jwks_rsa.json:/usr/share/nginx/html/jwks.json:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/jwks.json"]
       interval: 2s
@@ -13,7 +13,7 @@ services:
     image: python:3-slim
     volumes:
       - ./mock_oauth.py:/mock_oauth.py:ro
-      - ../lib/src/tests/fixtures:/fixtures:ro
+      - ../lib/tests/fixtures:/fixtures:ro
     command:
       - bash
       - -c

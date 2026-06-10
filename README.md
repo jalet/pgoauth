@@ -35,7 +35,7 @@ make down
 
 | Path     | Contents                                               |
 | -------- | ------------------------------------------------------ |
-| `lib/`   | Rust validator (`lib/src`) and its container image     |
+| `lib/`   | Rust validator crate and its container image           |
 | `test/`  | docker-compose harness: mock IdP, JWKS, Postgres       |
 | `docs/`  | Tutorial and deployment how-to                         |
 | `Makefile` | `build`, `up`, `unit-test`, `test-oauth`, `test`     |

@@ -31,7 +31,8 @@ RUN cargo install cargo-pgrx --version "=0.17.0" --locked \
 ENV PG_CONFIG=/usr/bin/pg_config
 
 WORKDIR /build
-COPY lib/src/ .
+COPY lib/Cargo.toml lib/Cargo.lock ./
+COPY lib/src ./src
 
 # cargo build --release is sufficient: we are a validator module, not a
 # CREATE EXTENSION extension, so no .control file is needed.

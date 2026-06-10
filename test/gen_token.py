@@ -9,7 +9,7 @@ try:
 except ImportError:
     sys.exit("Missing dependency: pip install pyjwt cryptography")
 
-FIXTURES = Path(__file__).parent.parent / "lib" / "src" / "tests" / "fixtures"
+FIXTURES = Path(__file__).parent.parent / "lib" / "tests" / "fixtures"
 
 key = (FIXTURES / "rsa_private.pem").read_text()
 now = int(time.time())

@@ -25,7 +25,7 @@ build: ## Build the CNPG extension image; stage its /lib and /share into test/ex
 # ── Unit tests ────────────────────────────────────────────────────────────────
 
 unit-test: ## Run Rust unit tests (uses the pg18 install from ~/.pgrx/config.toml)
-	cd lib/src && \
+	cd lib && \
 	if command -v xcrun >/dev/null 2>&1; then \
 	  export BINDGEN_EXTRA_CLANG_ARGS="-isysroot $$(xcrun --show-sdk-path)"; \
 	fi; \

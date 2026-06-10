@@ -108,14 +108,14 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('lib/src/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('lib/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
       - name: Run unit tests
         env:
           PGRX_PG_CONFIG_PATH: /usr/bin/pg_config
-        run: cd lib/src && cargo test --locked --features pg18
+        run: cd lib && cargo test --locked --features pg18
 
   build:
     runs-on: ${{ startsWith(matrix.platform, 'linux/arm') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
