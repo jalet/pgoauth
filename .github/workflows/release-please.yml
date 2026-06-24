@@ -1,0 +1,26 @@
+name: Release Please
+
+# Versioning only: opens/maintains a release PR from Conventional Commits, then on merge
+# bumps lib/Cargo.toml (+ Cargo.lock), updates the changelog, and creates the vX.Y.Z tag
+# and GitHub release. Image publishing is NOT wired here -- the existing lib-dkr.yaml still
+# builds latest/sha on each push to main. NOTE: the tag created with GITHUB_TOKEN does not
+# cascade, so it will not trigger lib-dkr.yaml's `tags: v*.*.*` build; wiring the versioned
+# image to releases (cascading token or a reusable build job) is deferred.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
