@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "rust",
+  "include-component-in-tag": false,
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "changelog-type": "github",
+  "bootstrap-sha": "350cd62c440474b4837b223c36bbb918f472f78f",
+  "packages": {
+    "lib": {
+      "package-name": "pg_oauth",
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}
