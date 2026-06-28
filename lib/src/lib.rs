@@ -160,12 +160,11 @@ pub fn role_authorized(role: &str, granted: &[String]) -> bool {
 
 /// Fetch a JWKS document from `uri` and parse it.
 pub fn fetch_jwks(uri: &str) -> Result<JwkSet, String> {
-    let response = ureq::get(uri)
+    let body = ureq::get(uri)
         .call()
-        .map_err(|e| format!("fetch JWKS from {}: {}", uri, e))?;
-
-    let body = response
-        .into_string()
+        .map_err(|e| format!("fetch JWKS from {}: {}", uri, e))?
+        .body_mut()
+        .read_to_string()
         .map_err(|e| format!("read JWKS body: {}", e))?;
 
     serde_json::from_str::<JwkSet>(&body)
