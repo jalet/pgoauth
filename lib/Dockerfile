@@ -3,7 +3,7 @@ ARG PG_VERSION=18
 # Full image tag (not just the version) so Renovate can manage the ARG default
 # directly. A partial variable like rust:${RUST_VERSION}-slim-bookworm breaks
 # Renovate's auto-replace ("Cannot find replaceString in current file content").
-ARG RUST_VERSION=1.96-slim-bookworm
+ARG RUST_VERSION=1.97-slim-bookworm
 
 FROM rust:${RUST_VERSION} AS builder
 
