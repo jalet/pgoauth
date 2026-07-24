@@ -14,7 +14,7 @@ pg18    = ["pgrx/pg18"]
 
 [dependencies]
 pgrx         = { version = "=0.19.1", default-features = false }
-jsonwebtoken = { version = "10", default-features = false, features = ["use_pem", "rust_crypto"] }
+jsonwebtoken = { version = "11", default-features = false, features = ["use_pem", "rust_crypto"] }
 serde        = { version = "1", features = ["derive"] }
 serde_json   = "1"
 ureq         = { version = "3", default-features = false, features = ["rustls"] }
