@@ -87,7 +87,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.97"
+          toolchain: "1.98"
 
       - name: Install PostgreSQL 18 dev headers
         run: |
