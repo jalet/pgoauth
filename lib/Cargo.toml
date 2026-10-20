@@ -21,7 +21,7 @@ ureq         = { version = "3", default-features = false, features = ["rustls"] 
 
 [dev-dependencies]
 # httpmock: local mock HTTP server for JWKS endpoint tests
-httpmock     = "0.8"
+httpmock     = "0.9"
 base64       = "0.23"
 
 [profile.release]
